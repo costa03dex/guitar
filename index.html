@@ -1,1089 +1,366 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="dark">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guitarra Virtual Studio - Simulador Ultra-Realista</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts Inter & Orbitron -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
-    
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        studio: {
-                            bg: '#0a0d14',
-                            card: '#121722',
-                            border: '#1f293d',
-                            accent: '#00f0ff',
-                            neonGreen: '#39ff14',
-                            gold: '#ffb703'
-                        }
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                        tech: ['Orbitron', 'sans-serif']
-                    }
-                }
-            }
-        }
-    </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Lente · Câmera com filtros</title>
+<style>
+  :root {
+    --glass: rgba(255,255,255,.14);
+    --glass-border: rgba(255,255,255,.28);
+    --text: #fff;
+    --accent: #ffe600;
+    --item: 64px;          /* tamanho de cada filtro no carrossel */
+    --item-active: 84px;   /* tamanho do filtro central (botão de captura) */
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; background: #000; color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
 
-    <style>
-        /* Custom Fretboard Wood Textures */
-        .wood-rosewood {
-            background: linear-gradient(180deg, #1d0f0a 0%, #2e1810 40%, #23120c 70%, #160a06 100%);
-            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.95);
-        }
-        .wood-ebony {
-            background: linear-gradient(180deg, #0e0e11 0%, #1a1a20 40%, #121216 70%, #08080a 100%);
-            box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.98);
-        }
-        .wood-maple {
-            background: linear-gradient(180deg, #cfa878 0%, #e6c596 40%, #dbb380 70%, #b89160 100%);
-            box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.5);
-        }
+  /* ---------- Preview em tela cheia ---------- */
+  #stage { position: fixed; inset: 0; background: #0a0a0f; }
+  #video { width: 100%; height: 100%; object-fit: cover; display: block;
+    transition: filter .25s ease; }
+  /* Espelha a câmera frontal (efeito de espelho). Só o preview/captura da frontal usam isso. */
+  #video.mirror { transform: scaleX(-1); }
+  /* Camada de cor usada pelo filtro Neon (mix-blend-mode simula o "overlay" do canvas) */
+  #tint { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s; }
 
-        /* Metallic Fret Wires (Trastes Prateados 3D) */
-        .fret-wire-bar {
-            position: absolute;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            width: 5px;
-            background: linear-gradient(90deg, #555 0%, #ffffff 45%, #cccccc 70%, #222 100%);
-            box-shadow: 2px 0 4px rgba(0,0,0,0.9), -1px 0 2px rgba(255,255,255,0.7);
-            z-index: 25;
-            pointer-events: none;
-        }
+  /* ---------- Elementos de vidro (glassmorphism) ---------- */
+  .glass { background: var(--glass); border: 1px solid var(--glass-border);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); }
 
-        /* Bone Nut (Pestana de Osso) */
-        .nut-bar {
-            background: linear-gradient(90deg, #e3dad0 0%, #fffcf5 50%, #d1c5b4 100%);
-            box-shadow: 3px 0 8px rgba(0,0,0,0.8), inset 0 0 4px rgba(0,0,0,0.3);
-        }
+  #topbar { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between;
+    align-items: center; padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 0; z-index: 5; }
+  .brand { padding: 8px 14px; border-radius: 999px; font-weight: 700; letter-spacing: .02em; font-size: 15px; }
+  .icon-btn { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center;
+    color: #fff; cursor: pointer; padding: 0; }
+  .icon-btn svg { width: 22px; height: 22px; }
 
-        /* Pearlescent Inlays */
-        .inlay-dot {
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #ffffff, #e0f2fe 50%, #94a3b8 100%);
-            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8), inset -1px -1px 3px rgba(0, 0, 0, 0.4);
-        }
+  /* ---------- Rodapé: nome do filtro + carrossel ---------- */
+  #bottom { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+    background: linear-gradient(to top, rgba(0,0,0,.55), transparent); padding-top: 40px; }
+  #filterName { text-align: center; font-size: 14px; font-weight: 600; height: 34px;
+    margin: 0 auto 8px; width: fit-content; padding: 7px 16px; border-radius: 999px; }
 
-        /* Glowing Note Dots ("Bolinhas" no Braço) */
-        .note-dot-active {
-            width: 26px;
-            height: 26px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 10px;
-            color: #090d16;
-            background: radial-gradient(circle at 35% 35%, #ffffff 0%, #00f0ff 60%, #0088ff 100%);
-            box-shadow: 0 0 18px rgba(0, 240, 255, 0.95), 0 0 8px rgba(255, 255, 255, 0.8);
-            border: 2px solid #ffffff;
-            transform: scale(1.15);
-            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            z-index: 45;
-            pointer-events: none;
-        }
+  /* Carrossel: scroll horizontal com "snap" para centralizar o item mais próximo */
+  #carousel { display: flex; align-items: center; gap: 18px; overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory; scrollbar-width: none; height: calc(var(--item-active) + 16px);
+    padding: 0 calc(50% - var(--item-active) / 2); }
+  #carousel::-webkit-scrollbar { display: none; }
+  .lens { flex: 0 0 auto; width: var(--item); height: var(--item); border-radius: 50%;
+    scroll-snap-align: center; border: 3px solid rgba(255,255,255,.75); cursor: pointer; padding: 0;
+    transition: width .2s, height .2s, border-color .2s, opacity .2s; opacity: .8; }
+  .lens.active { width: var(--item-active); height: var(--item-active); border: 5px solid #fff;
+    opacity: 1; box-shadow: 0 0 0 3px rgba(0,0,0,.25), 0 6px 24px rgba(0,0,0,.45); }
+  .lens.active:active { transform: scale(.93); }
+  .lens:focus-visible, .icon-btn:focus-visible, .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
-        .note-dot-chord {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 800;
-            font-size: 9px;
-            color: #0f172a;
-            background: radial-gradient(circle at 35% 35%, #ffea79 0%, #ffb703 70%, #d97706 100%);
-            box-shadow: 0 0 14px rgba(255, 183, 3, 0.95), inset 0 0 4px rgba(255, 255, 255, 0.8);
-            border: 1.5px solid #ffffff;
-            z-index: 40;
-            transition: all 0.15s ease-out;
-        }
+  /* ---------- Flash de captura ---------- */
+  #flash { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 8; }
+  #flash.go { animation: flash .35s ease-out; }
+  @keyframes flash { 0% { opacity: .9 } 100% { opacity: 0 } }
 
-        .note-dot-strummed {
-            animation: pulseDot 0.4s ease-out;
-        }
+  /* ---------- Modal da foto ---------- */
+  #modal { position: fixed; inset: 0; z-index: 10; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,.6); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); padding: 20px; }
+  #modal.open { display: flex; }
+  .sheet { width: min(420px, 100%); border-radius: 26px; padding: 14px; display: flex; flex-direction: column; gap: 14px;
+    animation: pop .22s ease-out; }
+  @keyframes pop { from { transform: scale(.94); opacity: 0 } to { transform: none; opacity: 1 } }
+  #photo { width: 100%; max-height: 62vh; object-fit: contain; border-radius: 16px; background: #000; display: block; }
+  .row { display: flex; gap: 10px; }
+  .btn { flex: 1; border: 0; border-radius: 14px; padding: 14px; font: inherit; font-weight: 700; cursor: pointer; }
+  .btn.primary { background: var(--accent); color: #111; }
+  .btn.ghost { background: rgba(255,255,255,.16); color: #fff; }
 
-        @keyframes pulseDot {
-            0% { transform: scale(0.8); box-shadow: 0 0 25px rgba(0, 240, 255, 1); }
-            50% { transform: scale(1.35); box-shadow: 0 0 35px rgba(57, 255, 20, 1); }
-            100% { transform: scale(1.15); }
-        }
+  /* ---------- Tela de erro / permissão ---------- */
+  #gate { position: fixed; inset: 0; z-index: 9; display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px; padding: 32px; text-align: center; background: #0a0a0f; }
+  #gate.show { display: flex; }
+  #gate p { max-width: 32ch; margin: 0; line-height: 1.5; opacity: .85; }
+  #gate .btn { flex: none; padding: 14px 28px; }
 
-        /* String Animations & Gauges */
-        .string-line {
-            position: absolute;
-            left: 0;
-            right: 0;
-            z-index: 30;
-            pointer-events: none;
-            transition: transform 0.05s ease-out;
-        }
-        
-        .vibrating-sm {
-            animation: vibrate 0.1s infinite alternate ease-in-out;
-        }
-        .vibrating-lg {
-            animation: vibrate 0.06s infinite alternate ease-in-out;
-        }
-
-        @keyframes vibrate {
-            0% { transform: translateY(-2px); }
-            100% { transform: translateY(2px); }
-        }
-
-        /* Custom Scrollbar for Guitar Neck */
-        .neck-scroll::-webkit-scrollbar {
-            height: 10px;
-        }
-        .neck-scroll::-webkit-scrollbar-track {
-            background: #0a0d14;
-        }
-        .neck-scroll::-webkit-scrollbar-thumb {
-            background: #1f293d;
-            border-radius: 5px;
-        }
-        .neck-scroll::-webkit-scrollbar-thumb:hover {
-            background: #00f0ff;
-        }
-
-        /* Glow effects */
-        .neon-glow-cyan {
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.5), inset 0 0 10px rgba(0, 240, 255, 0.3);
-        }
-        .neon-glow-green {
-            box-shadow: 0 0 15px rgba(57, 255, 20, 0.6), inset 0 0 10px rgba(57, 255, 20, 0.3);
-        }
-        .neon-text-glow {
-            text-shadow: 0 0 10px rgba(0, 240, 255, 0.8);
-        }
-    </style>
+  @media (min-width: 900px) {
+    /* No desktop o preview continua em tela cheia; só aumentamos o carrossel levemente */
+    :root { --item: 72px; --item-active: 96px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
 </head>
-<body class="bg-studio-bg text-slate-100 font-sans min-h-screen flex flex-col justify-between overflow-x-hidden select-none">
-
-    <!-- Top Header Bar -->
-    <header class="bg-studio-card border-b border-studio-border p-3 md:p-4 sticky top-0 z-50">
-        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-            <!-- Brand & Status -->
-            <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-slate-950 font-black text-xl shadow-lg shadow-cyan-500/20">
-                    <i class="fa-solid font-bold fa-guitar"></i>
-                </div>
-                <div>
-                    <h1 class="font-tech text-lg md:text-xl font-black tracking-wider text-white flex items-center gap-2">
-                        GUITARRA <span class="text-studio-accent">STUDIO</span>
-                    </h1>
-                    <p class="text-xs text-slate-400">Simulador Pro HTML5 • Web Audio API</p>
-                </div>
-            </div>
-
-            <!-- Main Mode Switcher (Chord vs Solo) -->
-            <div class="flex items-center bg-slate-900/80 p-1 rounded-xl border border-studio-border">
-                <button id="btnModeChord" onclick="setMode('chord')" class="px-4 py-2 rounded-lg font-tech text-xs md:text-sm font-bold transition-all flex items-center gap-2 bg-studio-accent text-slate-950 shadow-md">
-                    <i class="fa-solid fa-layer-group"></i> ACORDES <span class="text-[10px] bg-slate-950/20 px-1.5 py-0.5 rounded">1-7</span>
-                </button>
-                <button id="btnModeSolo" onclick="setMode('solo')" class="px-4 py-2 rounded-lg font-tech text-xs md:text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-bolt"></i> MODO SOLO <span class="text-[10px] bg-cyan-950/80 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.5 rounded">BACKSPACE</span>
-                </button>
-            </div>
-
-            <!-- Quick Controls & Sound Profile -->
-            <div class="flex items-center gap-2">
-                <!-- Tone Profile Selector -->
-                <select id="toneProfile" onchange="changeTone(this.value)" class="bg-slate-900 text-xs font-semibold text-slate-300 border border-studio-border rounded-lg px-3 py-2 outline-none focus:border-studio-accent">
-                    <option value="lead">🎸 Overdrive Lead</option>
-                    <option value="clean">✨ Clean Bright</option>
-                    <option value="acoustic">🪕 Violão / Acoustic</option>
-                </select>
-
-                <!-- Audio Switch Toggle -->
-                <button id="btnAudioToggle" onclick="toggleAudioContext()" class="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition" title="Ativar/Desativar Áudio">
-                    <i class="fa-solid fa-volume-high text-base"></i>
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Main Workspace -->
-    <main class="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-4 flex flex-col gap-4">
-
-        <!-- Dynamic Studio HUD / Dashboard -->
-        <section class="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <!-- Display Active Mode & Playing Note -->
-            <div class="md:col-span-2 bg-studio-card border border-studio-border rounded-2xl p-4 flex items-center justify-between relative overflow-hidden">
-                <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-cyan-500/5 rounded-full blur-2xl"></div>
-                <div>
-                    <div class="text-[10px] font-tech uppercase tracking-widest text-slate-400 mb-1 flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-studio-accent animate-ping"></span> Estado da Guitarra
-                    </div>
-                    <div id="hudModeText" class="font-tech text-xl md:text-2xl font-black text-cyan-400 neon-text-glow">
-                        MODO ACORDES <span class="text-xs font-normal text-slate-400">(A-J, Q-Y)</span>
-                    </div>
-                    <div id="hudSubText" class="text-xs text-slate-400 mt-1">
-                        Use a Barra de Espaço para palhetar para baixo ou Shift para cima.
-                    </div>
-                </div>
-
-                <div class="text-right">
-                    <div class="text-[10px] font-tech uppercase text-slate-400 mb-1">Nota Ativa</div>
-                    <div id="hudActiveNote" class="font-tech text-3xl md:text-4xl font-black text-studio-gold">
-                        --
-                    </div>
-                    <div id="hudFreqHz" class="text-[10px] font-mono text-slate-500">0.0 Hz</div>
-                </div>
-            </div>
-
-            <!-- Scale Assistant Helper -->
-            <div class="bg-studio-card border border-studio-border rounded-2xl p-3 flex flex-col justify-between">
-                <div class="flex items-center justify-between mb-1">
-                    <label class="text-xs font-tech font-bold text-slate-300 flex items-center gap-1.5">
-                        <i class="fa-solid fa-graduation-cap text-studio-accent"></i> Guia de Escalas
-                    </label>
-                    <span class="text-[10px] text-slate-500">Visualizer</span>
-                </div>
-                <select id="scaleSelect" onchange="highlightScale(this.value)" class="bg-slate-900 text-xs text-slate-200 border border-studio-border rounded-lg p-2 outline-none">
-                    <option value="none">Nenhuma (Livre)</option>
-                    <option value="pentaMinA">Pentatônica Menor (Lá / A)</option>
-                    <option value="bluesA">Escola de Blues em Lá</option>
-                    <option value="majorA">Escala Maior de Lá</option>
-                    <option value="minorA">Escala Menor Natural de Lá</option>
-                </select>
-                <p class="text-[10px] text-slate-400 mt-1">Destaca com anéis verdes as notas perfeitas para solar.</p>
-            </div>
-
-            <!-- Fretboard Wood Selector -->
-            <div class="bg-studio-card border border-studio-border rounded-2xl p-3 flex flex-col justify-between">
-                <div class="flex items-center justify-between mb-1">
-                    <label class="text-xs font-tech font-bold text-slate-300 flex items-center gap-1.5">
-                        <i class="fa-solid fa-tree text-amber-500"></i> Madeira do Braço
-                    </label>
-                    <span class="text-[10px] text-amber-500/80">Visual</span>
-                </div>
-                <div class="grid grid-cols-3 gap-1.5">
-                    <button onclick="setWood('rosewood')" class="py-1.5 px-2 rounded bg-amber-950 border border-amber-800/50 text-[10px] text-amber-200 font-bold hover:brightness-125">
-                        Jacarandá
-                    </button>
-                    <button onclick="setWood('ebony')" class="py-1.5 px-2 rounded bg-slate-900 border border-slate-700 text-[10px] text-slate-300 font-bold hover:brightness-125">
-                        Ébano
-                    </button>
-                    <button onclick="setWood('maple')" class="py-1.5 px-2 rounded bg-amber-200 border border-amber-400 text-[10px] text-amber-950 font-bold hover:brightness-125">
-                        Marfim
-                    </button>
-                </div>
-                <p class="text-[10px] text-slate-500 mt-1">Troca a textura nobre do braço em tempo real.</p>
-            </div>
-        </section>
-
-        <!-- Guitar Neck (Fretboard Ultra-Realista de 21 Trastes) -->
-        <section class="bg-slate-950 border-2 border-studio-border rounded-2xl p-3 sm:p-5 shadow-2xl relative">
-            
-            <div class="flex items-center justify-between mb-2">
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-tech font-bold text-slate-400 uppercase tracking-wider">Braço da Guitarra (21 Trastes)</span>
-                    <span class="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full border border-slate-700">Afinação Standard (E A D G B E)</span>
-                </div>
-                <div class="text-xs text-slate-400 hidden sm:block">
-                    <i class="fa-solid fa-hand-pointer text-studio-accent mr-1"></i> Clique em qualquer casa para tocar a nota
-                </div>
-            </div>
-
-            <!-- Guitar Neck Container -->
-            <div class="neck-scroll overflow-x-auto pb-2 pt-1">
-                <div class="min-w-[1100px] flex items-center relative select-none">
-                    
-                    <!-- Headstock Visual (Extremidade Esquerda) -->
-                    <div class="w-20 h-48 bg-gradient-to-r from-slate-900 via-slate-800 to-amber-950/80 rounded-l-2xl border-r-4 border-slate-900 relative flex flex-col justify-between p-2 shadow-2xl flex-shrink-0">
-                        <div class="text-[9px] font-tech text-amber-400 font-bold text-center tracking-widest uppercase opacity-80">PRO STUDIO</div>
-                        <!-- Tuning Pegs Top -->
-                        <div class="flex justify-between px-1">
-                            <div class="w-3 h-4 bg-gradient-to-b from-slate-300 to-slate-500 rounded-sm shadow-md border border-slate-600"></div>
-                            <div class="w-3 h-4 bg-gradient-to-b from-slate-300 to-slate-500 rounded-sm shadow-md border border-slate-600"></div>
-                            <div class="w-3 h-4 bg-gradient-to-b from-slate-300 to-slate-500 rounded-sm shadow-md border border-slate-600"></div>
-                        </div>
-                        <div class="text-center">
-                            <i class="fa-solid fa-shield-halved text-amber-500/40 text-xl"></i>
-                        </div>
-                        <!-- Tuning Pegs Bottom -->
-                        <div class="flex justify-between px-1">
-                            <div class="w-3 h-4 bg-gradient-to-b from-slate-300 to-slate-500 rounded-sm shadow-md border border-slate-600"></div>
-                            <div class="w-3 h-4 bg-gradient-to-b from-slate-300 to-slate-500 rounded-sm shadow-md border border-slate-600"></div>
-                            <div class="w-3 h-4 bg-gradient-to-b from-slate-300 to-slate-500 rounded-sm shadow-md border border-slate-600"></div>
-                        </div>
-                    </div>
-
-                    <!-- Pestana de Osso (Nut / Casa 0) -->
-                    <div class="w-5 h-48 nut-bar rounded-sm z-30 flex flex-col justify-between py-2 text-[9px] font-bold text-slate-700 text-center flex-shrink-0">
-                        <span>E</span><span>B</span><span>G</span><span>D</span><span>A</span><span>E</span>
-                    </div>
-
-                    <!-- Fretboard Board Container -->
-                    <div id="fretboard" class="flex-1 h-48 wood-rosewood relative flex rounded-r-xl border-y-2 border-slate-800 overflow-hidden shadow-2xl">
-                        <!-- Strings Layer -->
-                        <div id="stringsContainer" class="absolute inset-0 flex flex-col justify-between py-3 pointer-events-none z-30">
-                            <!-- 6 Guitar Strings rendered via JS with varying gauges -->
-                        </div>
-
-                        <!-- Frets Columns (0 to 21) -->
-                        <!-- Rendered by JS -->
-                    </div>
-
-                </div>
-            </div>
-
-            <!-- Fret Markers Bar at the Bottom -->
-            <div class="flex justify-between text-[10px] font-tech text-slate-500 mt-2 px-2 pl-24">
-                <span>Pestana</span>
-                <span>Traste 3</span>
-                <span>Traste 5</span>
-                <span>Traste 7</span>
-                <span>Traste 9</span>
-                <span class="text-studio-accent font-bold">12 (Oitava)</span>
-                <span>Traste 15</span>
-                <span>Traste 17</span>
-                <span>Traste 19</span>
-                <span class="text-studio-accent font-bold">21</span>
-            </div>
-        </section>
-
-        <!-- Guitar Controls, Techniques & Rhythm Section -->
-        <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            
-            <!-- Techniques Panel -->
-            <div class="bg-studio-card border border-studio-border rounded-2xl p-4">
-                <h3 class="text-xs font-tech font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <i class="fa-solid fa-wand-magic-sparkles text-studio-accent"></i> Técnicas Expressivas
-                </h3>
-                <div class="grid grid-cols-2 gap-2">
-                    <button id="btnBend" onclick="triggerTechnique('bend')" class="p-2.5 rounded-xl bg-slate-900 border border-studio-border hover:border-cyan-500 text-xs font-bold text-slate-300 flex items-center justify-between transition">
-                        <span><i class="fa-solid fa-arrow-trend-up text-cyan-400 mr-1.5"></i> Bend</span>
-                        <span class="text-[9px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-mono">Tecla Z</span>
-                    </button>
-
-                    <button id="btnSlide" onclick="triggerTechnique('slide')" class="p-2.5 rounded-xl bg-slate-900 border border-studio-border hover:border-cyan-500 text-xs font-bold text-slate-300 flex items-center justify-between transition">
-                        <span><i class="fa-solid fa-sliders text-cyan-400 mr-1.5"></i> Slide</span>
-                        <span class="text-[9px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-mono">Tecla X</span>
-                    </button>
-
-                    <button id="btnVibrato" onclick="triggerTechnique('vibrato')" class="p-2.5 rounded-xl bg-slate-900 border border-studio-border hover:border-cyan-500 text-xs font-bold text-slate-300 flex items-center justify-between transition">
-                        <span><i class="fa-solid fa-wave-square text-cyan-400 mr-1.5"></i> Vibrato</span>
-                        <span class="text-[9px] bg-slate-800 text-cyan-400 px-1.5 py-0.5 rounded font-mono">Tecla V</span>
-                    </button>
-
-                    <button id="btnPalmMute" onclick="togglePalmMute()" class="p-2.5 rounded-xl bg-slate-900 border border-studio-border hover:border-amber-500 text-xs font-bold text-slate-300 flex items-center justify-between transition">
-                        <span><i class="fa-solid fa-hand text-amber-400 mr-1.5"></i> Palm Mute</span>
-                        <span class="text-[9px] bg-slate-800 text-amber-400 px-1.5 py-0.5 rounded font-mono">Tecla C</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Strumming & Chord Trigger Section -->
-            <div class="bg-studio-card border border-studio-border rounded-2xl p-4 flex flex-col justify-between">
-                <h3 class="text-xs font-tech font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
-                    <i class="fa-solid fa-hand-back-fist text-studio-gold"></i> Palhetada Manual
-                </h3>
-
-                <div class="grid grid-cols-2 gap-2 my-1">
-                    <button onclick="strum('down')" class="py-3 px-4 rounded-xl bg-gradient-to-b from-amber-500 to-amber-600 text-slate-950 font-tech font-black text-xs shadow-lg hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-arrow-down text-base"></i> PALHETADA PARA BAIXO
-                    </button>
-                    <button onclick="strum('up')" class="py-3 px-4 rounded-xl bg-gradient-to-b from-cyan-500 to-blue-600 text-slate-950 font-tech font-black text-xs shadow-lg hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2">
-                        <i class="fa-solid fa-arrow-up text-base"></i> PALHETADA PARA CIMA
-                    </button>
-                </div>
-
-                <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                    <span>Atalho Baixo: <kbd class="bg-slate-900 border border-slate-700 px-1.5 py-0.5 rounded text-white font-mono">Espaço</kbd> / <kbd class="bg-slate-900 border border-slate-700 px-1.5 py-0.5 rounded text-white font-mono">↓</kbd></span>
-                    <span>Atalho Cima: <kbd class="bg-slate-900 border border-slate-700 px-1.5 py-0.5 rounded text-white font-mono">Shift</kbd> / <kbd class="bg-slate-900 border border-slate-700 px-1.5 py-0.5 rounded text-white font-mono">↑</kbd></span>
-                </div>
-            </div>
-
-            <!-- Auto-Strummer / Rhythm Section -->
-            <div class="bg-studio-card border border-studio-border rounded-2xl p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <h3 class="text-xs font-tech font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <i class="fa-solid fa-drum text-emerald-400"></i> Rítmica Automática
-                    </h3>
-                    <button id="btnAutoStrum" onclick="toggleAutoStrummer()" class="px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 font-tech text-xs font-bold hover:bg-emerald-500/20 transition">
-                        LIGAR
-                    </button>
-                </div>
-
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs text-slate-400">Ritmo / Gênero:</span>
-                        <select id="rhythmStyle" class="bg-slate-900 text-xs text-slate-200 border border-studio-border rounded px-2 py-1 outline-none">
-                            <option value="rock">🎸 Rock Standard 4/4</option>
-                            <option value="pop">✨ Pop Strumming</option>
-                            <option value="sertanejo">🤠 Sertanejo / Folk</option>
-                            <option value="reggae">🌴 Reggae Offbeat</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <div class="flex justify-between text-xs text-slate-400 mb-1">
-                            <span>Andamento (BPM):</span>
-                            <span id="bpmDisplay" class="font-bold text-emerald-400 font-mono">120 BPM</span>
-                        </div>
-                        <input type="range" id="bpmSlider" min="60" max="200" value="120" oninput="updateBPM(this.value)" class="w-full accent-emerald-400 cursor-pointer">
-                    </div>
-                </div>
-            </div>
-
-        </section>
-
-        <!-- Interactive Keyboard Reference Map (Teclado Visual Guia) -->
-        <section class="bg-studio-card border border-studio-border rounded-2xl p-4">
-            <h3 class="text-xs font-tech font-bold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <i class="fa-solid fa-keyboard text-studio-accent"></i> Guia Rápido de Mapeamento do Teclado PC
-            </h3>
-
-            <div id="chordMapGuide" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
-                <!-- Chord Keys Cards -->
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                    <span class="block text-[10px] text-slate-500 uppercase font-tech">Tecla A</span>
-                    <span class="font-tech text-base font-bold text-cyan-400">Lá Maior (A)</span>
-                </div>
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                    <span class="block text-[10px] text-slate-500 uppercase font-tech">Tecla S</span>
-                    <span class="font-tech text-base font-bold text-cyan-400">Si Maior (B)</span>
-                </div>
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                    <span class="block text-[10px] text-slate-500 uppercase font-tech">Tecla D</span>
-                    <span class="font-tech text-base font-bold text-cyan-400">Dó Maior (C)</span>
-                </div>
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                    <span class="block text-[10px] text-slate-500 uppercase font-tech">Tecla F</span>
-                    <span class="font-tech text-base font-bold text-cyan-400">Ré Maior (D)</span>
-                </div>
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                    <span class="block text-[10px] text-slate-500 uppercase font-tech">Tecla G</span>
-                    <span class="font-tech text-base font-bold text-cyan-400">Mi Maior (E)</span>
-                </div>
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                    <span class="block text-[10px] text-slate-500 uppercase font-tech">Tecla H</span>
-                    <span class="font-tech text-base font-bold text-cyan-400">Fá Maior (F)</span>
-                </div>
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-2.5 text-center">
-                    <span class="block text-[10px] text-slate-500 uppercase font-tech">Tecla J</span>
-                    <span class="font-tech text-base font-bold text-cyan-400">Sol Maior (G)</span>
-                </div>
-            </div>
-
-            <div id="soloMapGuide" class="hidden space-y-2 mt-2 text-xs text-slate-300">
-                <div class="bg-slate-900 p-2.5 rounded-xl border border-cyan-500/20 grid grid-cols-1 md:grid-cols-4 gap-2">
-                    <div><span class="font-bold text-cyan-400">Fileira 1 a =</span> : Corda 1 (E4 Mi Agudo)</div>
-                    <div><span class="font-bold text-cyan-400">Fileira Q a ]</span> : Corda 2 (B3 Si)</div>
-                    <div><span class="font-bold text-cyan-400">Fileira A a '</span> : Corda 3 (G3 Sol)</div>
-                    <div><span class="font-bold text-cyan-400">Fileira Z a /</span> : Corda 4 (D3 Ré)</div>
-                </div>
-                <p class="text-[11px] text-slate-400">* Segure <kbd class="bg-slate-800 px-1 rounded text-white">Shift</kbd> para alcançar as cordas graves 5 (Lá) e 6 (Mi Grave).</p>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- Footer -->
-    <footer class="bg-studio-card border-t border-studio-border p-3 text-center text-xs text-slate-500">
-        Guitarra Virtual Studio &copy; 2026 • Desenvolvido em HTML5 & Web Audio API
-    </footer>
-
-    <!-- JavaScript Application Engine -->
-    <script>
-        /* ===================================================================
-           1. GUITAR ENGINE CONSTANTS & STATE MANAGEMENT
-           =================================================================== */
-        const TOTAL_FRETS = 21;
-        const CHROMATIC_NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-        
-        // Standard Guitar Tuning Frequencies (Hz) for strings 1 (high E) to 6 (low E)
-        const STRING_BASE_FREQS = [
-            329.63, // String 1: E4
-            246.94, // String 2: B3
-            196.00, // String 3: G3
-            146.83, // String 4: D3
-            110.00, // String 5: A2
-            82.41   // String 6: E2
-        ];
-
-        const STRING_NAMES = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
-
-        // Fret Inlay Markers (Pearlescent Dots)
-        const INLAY_FRETS = [3, 5, 7, 9, 12, 15, 17, 19, 21];
-
-        // State
-        let currentMode = 'chord'; // 'chord' or 'solo'
-        let currentTone = 'lead';  // 'lead', 'clean', 'acoustic'
-        let palmMuteActive = false;
-        let activeScale = 'none';
-        let isAutoStrumming = false;
-        let autoStrumInterval = null;
-        let bpm = 120;
-
-        // Recently struck notes map for "Bolinhas" active animation
-        let currentlyPlayingNotes = {};
-
-        // Current Chord Selection (Default A Major)
-        let activeChordNotes = [
-            { string: 0, fret: 0 }, // E4
-            { string: 1, fret: 2 }, // C#4
-            { string: 2, fret: 2 }, // A3
-            { string: 3, fret: 2 }, // E3
-            { string: 4, fret: 0 }, // A2
-            { string: 5, fret: 0 }  // E2
-        ];
-        let activeChordName = "Lá Maior (A)";
-
-        /* ===================================================================
-           2. WEB AUDIO API SYNTHESIZER ENGINE
-           =================================================================== */
-        let audioCtx = null;
-        let masterGain = null;
-
-        function initAudio() {
-            if (!audioCtx) {
-                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-                audioCtx = new AudioContextClass();
-                masterGain = audioCtx.createGain();
-                masterGain.gain.value = 0.8;
-                masterGain.connect(audioCtx.destination);
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-        }
-
-        function toggleAudioContext() {
-            initAudio();
-            const btn = document.getElementById('btnAudioToggle');
-            if (audioCtx.state === 'running') {
-                btn.className = "p-2.5 rounded-lg bg-emerald-500/20 border border-emerald-500 text-emerald-400";
-            } else {
-                btn.className = "p-2.5 rounded-lg bg-red-500/20 border border-red-500 text-red-400";
-            }
-        }
-
-        // Play Guitar String Note
-        function playNote(freq, stringIdx = 0, duration = 2.5, bendSemitones = 0) {
-            initAudio();
-            if (!audioCtx) return;
-
-            const now = audioCtx.currentTime;
-
-            // Apply Bend pitch shift if active
-            const finalFreq = freq * Math.pow(2, bendSemitones / 12);
-
-            // Primary String Oscillator (Blend Sawtooth + Triangle for guitar timbre)
-            const osc1 = audioCtx.createOscillator();
-            const osc2 = audioCtx.createOscillator();
-
-            if (currentTone === 'lead') {
-                osc1.type = 'sawtooth';
-                osc2.type = 'square';
-            } else if (currentTone === 'clean') {
-                osc1.type = 'triangle';
-                osc2.type = 'sine';
-            } else {
-                osc1.type = 'triangle';
-                osc2.type = 'sawtooth';
-            }
-
-            osc1.frequency.setValueAtTime(finalFreq, now);
-            osc2.frequency.setValueAtTime(finalFreq * 1.002, now); // subtle detune for richness
-
-            // Filter
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'lowpass';
-            
-            if (palmMuteActive) {
-                filter.frequency.setValueAtTime(450, now); // Muted lowpass
-            } else if (currentTone === 'lead') {
-                filter.frequency.setValueAtTime(3200, now);
-            } else {
-                filter.frequency.setValueAtTime(2200, now);
-            }
-
-            // Envelope Gain
-            const noteGain = audioCtx.createGain();
-            const attackTime = 0.008;
-            const decayTime = palmMuteActive ? 0.25 : duration;
-
-            noteGain.gain.setValueAtTime(0.0001, now);
-            noteGain.gain.exponentialRampToValueAtTime(0.7, now + attackTime);
-            noteGain.gain.exponentialRampToValueAtTime(0.0001, now + decayTime);
-
-            // Routing
-            osc1.connect(filter);
-            osc2.connect(filter);
-            filter.connect(noteGain);
-            noteGain.connect(masterGain);
-
-            osc1.start(now);
-            osc2.start(now);
-            osc1.stop(now + decayTime + 0.1);
-            osc2.stop(now + decayTime + 0.1);
-
-            // Animate Physical String Vibration
-            triggerStringVibration(stringIdx);
-        }
-
-        /* ===================================================================
-           3. FRETBOARD UI GENERATOR & RENDERER
-           =================================================================== */
-        function renderFretboard() {
-            const fretboardEl = document.getElementById('fretboard');
-            const stringsContainer = document.getElementById('stringsContainer');
-
-            fretboardEl.innerHTML = '';
-            stringsContainer.innerHTML = '';
-
-            // 1. Render 6 Physical Guitar Strings
-            const stringGauges = [1.5, 2.0, 2.6, 3.4, 4.2, 5.0]; // mm gauges
-            for (let s = 0; s < 6; s++) {
-                const strDiv = document.createElement('div');
-                strDiv.id = `string-${s}`;
-                strDiv.className = 'string-line shadow-md';
-                strDiv.style.height = `${stringGauges[s]}px`;
-                strDiv.style.top = `${15 + s * 15.5}%`;
-                
-                // Color texture: Thin stainless steel top strings, Wound brass/nickel bottom strings
-                if (s < 3) {
-                    strDiv.style.background = 'linear-gradient(180deg, #f8fafc 0%, #cbd5e1 50%, #64748b 100%)';
-                } else {
-                    strDiv.style.background = 'linear-gradient(180deg, #fef08a 0%, #d97706 50%, #78350f 100%)';
-                }
-                stringsContainer.appendChild(strDiv);
-            }
-
-            // 2. Render Frets (0 to 21)
-            for (let f = 0; f <= TOTAL_FRETS; f++) {
-                const fretCol = document.createElement('div');
-                fretCol.className = `relative flex-1 h-full flex flex-col justify-between items-center py-1 border-r border-black/30 z-20 hover:bg-white/5 transition-colors cursor-pointer`;
-                
-                // Silver 3D Fret Wire
-                if (f > 0) {
-                    const fretWire = document.createElement('div');
-                    fretWire.className = 'fret-wire-bar';
-                    fretCol.appendChild(fretWire);
-                }
-
-                // Pearlescent Inlay Dot
-                if (INLAY_FRETS.includes(f)) {
-                    const inlayContainer = document.createElement('div');
-                    inlayContainer.className = 'absolute inset-0 flex flex-col items-center justify-center gap-10 pointer-events-none opacity-80';
-                    
-                    const dot1 = document.createElement('div');
-                    dot1.className = 'inlay-dot';
-                    inlayContainer.appendChild(dot1);
-
-                    // Double dots on 12 and 21
-                    if (f === 12 || f === 21) {
-                        const dot2 = document.createElement('div');
-                        dot2.className = 'inlay-dot';
-                        inlayContainer.appendChild(dot2);
-                    }
-                    fretCol.appendChild(inlayContainer);
-                }
-
-                // Interactive Fret Cells per String
-                const cellsWrapper = document.createElement('div');
-                cellsWrapper.className = 'w-full h-full flex flex-col justify-between relative z-30 py-1';
-
-                for (let s = 0; s < 6; s++) {
-                    const noteInfo = getNoteForStringFret(s, f);
-                    const cell = document.createElement('div');
-                    cell.id = `cell-${s}-${f}`;
-                    cell.className = `w-full h-6 flex items-center justify-center text-[9px] font-bold font-mono transition-all rounded-full`;
-                    
-                    // Solo mode key badge mapping hint text
-                    const keyHint = getSoloKeyHint(s, f);
-                    cell.innerHTML = `<span class="opacity-0 hover:opacity-100 text-[8px] bg-slate-950/80 px-1 rounded text-cyan-400">${noteInfo.name}</span>`;
-
-                    cell.onclick = (e) => {
-                        e.stopPropagation();
-                        playFretDirect(s, f);
-                    };
-
-                    cellsWrapper.appendChild(cell);
-                }
-
-                fretCol.appendChild(cellsWrapper);
-                fretboardEl.appendChild(fretCol);
-            }
-
-            updateFretboardBadges();
-        }
-
-        // Calculate note name and frequency for any string + fret position
-        function getNoteForStringFret(stringIdx, fret) {
-            const baseFreq = STRING_BASE_FREQS[stringIdx];
-            const freq = baseFreq * Math.pow(2, fret / 12);
-            
-            // Note name derivation
-            const openNoteIndices = [4, 11, 7, 2, 9, 4]; // E, B, G, D, A, E
-            const noteIdx = (openNoteIndices[stringIdx] + fret) % 12;
-            const noteName = CHROMATIC_NOTES[noteIdx];
-
-            return { name: noteName, freq: freq.toFixed(1) };
-        }
-
-        function triggerStringVibration(stringIdx) {
-            const strEl = document.getElementById(`string-${stringIdx}`);
-            if (strEl) {
-                strEl.classList.add('vibrating-lg');
-                setTimeout(() => {
-                    strEl.classList.remove('vibrating-lg');
-                }, 300);
-            }
-        }
-
-        /* ===================================================================
-           4. MODES, KEY MAPPING & SOLO LOGIC
-           =================================================================== */
-        
-        function setMode(mode) {
-            currentMode = mode;
-            const btnChord = document.getElementById('btnModeChord');
-            const btnSolo = document.getElementById('btnModeSolo');
-            const hudMode = document.getElementById('hudModeText');
-            const hudSub = document.getElementById('hudSubText');
-            const chordGuide = document.getElementById('chordMapGuide');
-            const soloGuide = document.getElementById('soloMapGuide');
-
-            if (mode === 'chord') {
-                btnChord.className = "px-4 py-2 rounded-lg font-tech text-xs md:text-sm font-bold transition-all flex items-center gap-2 bg-studio-accent text-slate-950 shadow-md";
-                btnSolo.className = "px-4 py-2 rounded-lg font-tech text-xs md:text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2";
-                hudMode.innerHTML = `MODO ACORDES <span class="text-xs font-normal text-slate-400">(A-J, Q-Y)</span>`;
-                hudSub.innerText = "Use a Barra de Espaço para palhetar para baixo ou Shift para cima.";
-                chordGuide.classList.remove('hidden');
-                soloGuide.classList.add('hidden');
-            } else {
-                btnSolo.className = "px-4 py-2 rounded-lg font-tech text-xs md:text-sm font-bold transition-all flex items-center gap-2 bg-studio-accent text-slate-950 shadow-md";
-                btnChord.className = "px-4 py-2 rounded-lg font-tech text-xs md:text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2";
-                hudMode.innerHTML = `MODO SOLO ATIVO <span class="text-xs font-normal text-emerald-400">40+ NOTAS</span>`;
-                hudSub.innerText = "Teclas da fileira 1-=, Q-], A-', Z-/ tocam notas individuais diretamente no braço!";
-                chordGuide.classList.add('hidden');
-                soloGuide.classList.remove('hidden');
-            }
-            updateFretboardBadges();
-        }
-
-        // Direct Fret Click Handler
-        function playFretDirect(stringIdx, fret) {
-            const info = getNoteForStringFret(stringIdx, fret);
-            playNote(parseFloat(info.freq), stringIdx);
-
-            document.getElementById('hudActiveNote').innerText = info.name;
-            document.getElementById('hudFreqHz').innerText = `${info.freq} Hz`;
-
-            // Mark note as currently playing for glowing "bolinha"
-            const key = `${stringIdx}-${fret}`;
-            currentlyPlayingNotes[key] = Date.now();
-            updateFretboardBadges();
-
-            setTimeout(() => {
-                delete currentlyPlayingNotes[key];
-                updateFretboardBadges();
-            }, 500);
-        }
-
-        // Key Mappings for Solo Mode (Row-based for 40+ frets/notes)
-        const SOLO_KEY_MAP = {
-            // String 0 (E4 - High E): Row 1 to =
-            '1': { string: 0, fret: 0 }, '2': { string: 0, fret: 1 }, '3': { string: 0, fret: 2 },
-            '4': { string: 0, fret: 3 }, '5': { string: 0, fret: 4 }, '6': { string: 0, fret: 5 },
-            '7': { string: 0, fret: 6 }, '8': { string: 0, fret: 7 }, '9': { string: 0, fret: 8 },
-            '0': { string: 0, fret: 9 }, '-': { string: 0, fret: 10 }, '=': { string: 0, fret: 11 },
-
-            // String 1 (B3): Row Q to ]
-            'q': { string: 1, fret: 0 }, 'w': { string: 1, fret: 1 }, 'e': { string: 1, fret: 2 },
-            'r': { string: 1, fret: 3 }, 't': { string: 1, fret: 4 }, 'y': { string: 1, fret: 5 },
-            'u': { string: 1, fret: 6 }, 'i': { string: 1, fret: 7 }, 'o': { string: 1, fret: 8 },
-            'p': { string: 1, fret: 9 }, '[': { string: 1, fret: 10 }, ']': { string: 1, fret: 11 },
-
-            // String 2 (G3): Row A to '
-            'a': { string: 2, fret: 0 }, 's': { string: 2, fret: 1 }, 'd': { string: 2, fret: 2 },
-            'f': { string: 2, fret: 3 }, 'g': { string: 2, fret: 4 }, 'h': { string: 2, fret: 5 },
-            'j': { string: 2, fret: 6 }, 'k': { string: 2, fret: 7 }, 'l': { string: 2, fret: 8 },
-
-            // String 3 (D3): Row Z to /
-            'z': { string: 3, fret: 0 }, 'x': { string: 3, fret: 1 }, 'c': { string: 3, fret: 2 },
-            'v': { string: 3, fret: 3 }, 'b': { string: 3, fret: 4 }, 'n': { string: 3, fret: 5 },
-            'm': { string: 3, fret: 6 }, ',': { string: 3, fret: 7 }, '.': { string: 3, fret: 8 }, '/': { string: 3, fret: 9 }
-        };
-
-        // Shift modifier mapping for low strings (A2 and Low E2)
-        const SOLO_KEY_SHIFT_MAP = {
-            'A': { string: 4, fret: 0 }, 'S': { string: 4, fret: 1 }, 'D': { string: 4, fret: 2 },
-            'F': { string: 4, fret: 3 }, 'G': { string: 4, fret: 4 }, 'H': { string: 4, fret: 5 },
-            'Z': { string: 5, fret: 0 }, 'X': { string: 5, fret: 1 }, 'C': { string: 5, fret: 2 },
-            'V': { string: 5, fret: 3 }, 'B': { string: 5, fret: 4 }, 'N': { string: 5, fret: 5 }
-        };
-
-        function getSoloKeyHint(stringIdx, fret) {
-            for (let k in SOLO_KEY_MAP) {
-                if (SOLO_KEY_MAP[k].string === stringIdx && SOLO_KEY_MAP[k].fret === fret) return k.toUpperCase();
-            }
-            return '';
-        }
-
-        // Chord Dictionary for Chord Mode
-        const CHORDS_DICT = {
-            'a': { name: 'Lá Maior (A)', notes: [{s:0,f:0},{s:1,f:2},{s:2,f:2},{s:3,f:2},{s:4,f:0},{s:5,f:0}] },
-            's': { name: 'Si Maior (B)', notes: [{s:0,f:2},{s:1,f:4},{s:2,f:4},{s:3,f:4},{s:4,f:2},{s:5,f:2}] },
-            'd': { name: 'Dó Maior (C)', notes: [{s:0,f:0},{s:1,f:1},{s:2,f:0},{s:3,f:2},{s:4,f:3},{s:5,f:0}] },
-            'f': { name: 'Ré Maior (D)', notes: [{s:0,f:2},{s:1,f:3},{s:2,f:2},{s:3,f:0},{s:4,f:0},{s:5,f:0}] },
-            'g': { name: 'Mi Maior (E)', notes: [{s:0,f:0},{s:1,f:0},{s:2,f:1},{s:3,f:2},{s:4,f:2},{s:5,f:0}] },
-            'h': { name: 'Fá Maior (F)', notes: [{s:0,f:1},{s:1,f:1},{s:2,f:2},{s:3,f:3},{s:4,f:3},{s:5,f:1}] },
-            'j': { name: 'Sol Maior (G)', notes: [{s:0,f:3},{s:1,f:0},{s:2,f:0},{s:3,f:0},{s:4,f:2},{s:5,f:3}] },
-
-            'q': { name: 'Lá Menor (Am)', notes: [{s:0,f:0},{s:1,f:1},{s:2,f:2},{s:3,f:2},{s:4,f:0},{s:5,f:0}] },
-            'w': { name: 'Si Menor (Bm)', notes: [{s:0,f:2},{s:1,f:3},{s:2,f:4},{s:3,f:4},{s:4,f:2},{s:5,f:2}] },
-            'e': { name: 'Dó Menor (Cm)', notes: [{s:0,f:3},{s:1,f:4},{s:2,f:5},{s:3,f:5},{s:4,f:3},{s:5,f:3}] },
-            'r': { name: 'Ré Menor (Dm)', notes: [{s:0,f:1},{s:1,f:3},{s:2,f:2},{s:3,f:0},{s:4,f:0},{s:5,f:0}] },
-            't': { name: 'Mi Menor (Em)', notes: [{s:0,f:0},{s:1,f:0},{s:2,f:0},{s:3,f:2},{s:4,f:2},{s:5,f:0}] },
-            'y': { name: 'Fá Menor (Fm)', notes: [{s:0,f:1},{s:1,f:1},{s:2,f:1},{s:3,f:3},{s:4,f:3},{s:5,f:1}] }
-        };
-
-        /* ===================================================================
-           5. STRUMMING & TECHNIQUES
-           =================================================================== */
-
-        function strum(direction = 'down') {
-            initAudio();
-            const notes = activeChordNotes;
-            const sequence = direction === 'down' ? [5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5];
-
-            sequence.forEach((sIdx, step) => {
-                const item = notes.find(n => (n.string !== undefined ? n.string : n.s) === sIdx);
-                if (item) {
-                    const fret = item.fret !== undefined ? item.fret : item.f;
-                    const info = getNoteForStringFret(sIdx, fret);
-                    setTimeout(() => {
-                        playNote(parseFloat(info.freq), sIdx);
-                        
-                        // Register note strike for glowing dot
-                        const key = `${sIdx}-${fret}`;
-                        currentlyPlayingNotes[key] = Date.now();
-                        updateFretboardBadges();
-
-                        setTimeout(() => {
-                            delete currentlyPlayingNotes[key];
-                            updateFretboardBadges();
-                        }, 500);
-                    }, step * 35); // 35ms arpeggiated strum delay
-                }
-            });
-
-            document.getElementById('hudActiveNote').innerText = activeChordName.split(' ')[0];
-        }
-
-        function triggerTechnique(type) {
-            initAudio();
-            if (type === 'bend') {
-                strum('down');
-                setTimeout(() => {
-                    // Re-trigger with bend
-                    const info = getNoteForStringFret(0, 2);
-                    playNote(parseFloat(info.freq), 0, 2.0, 2); // 2 semitones bend
-                }, 200);
-            } else if (type === 'vibrato') {
-                strum('down');
-            } else if (type === 'slide') {
-                playFretDirect(2, 2);
-                setTimeout(() => playFretDirect(2, 4), 150);
-                setTimeout(() => playFretDirect(2, 7), 300);
-            }
-        }
-
-        function togglePalmMute() {
-            palmMuteActive = !palmMuteActive;
-            const btn = document.getElementById('btnPalmMute');
-            if (palmMuteActive) {
-                btn.className = "p-2.5 rounded-xl bg-amber-500/20 border border-amber-500 text-xs font-bold text-amber-300 flex items-center justify-between transition shadow-lg shadow-amber-500/10";
-            } else {
-                btn.className = "p-2.5 rounded-xl bg-slate-900 border border-studio-border hover:border-amber-500 text-xs font-bold text-slate-300 flex items-center justify-between transition";
-            }
-        }
-
-        function changeTone(tone) {
-            currentTone = tone;
-        }
-
-        function setWood(wood) {
-            const fretboard = document.getElementById('fretboard');
-            fretboard.className = `flex-1 h-48 wood-${wood} relative flex rounded-r-xl border-y-2 border-slate-800 overflow-hidden shadow-2xl`;
-        }
-
-        /* ===================================================================
-           6. SCALE VISUALIZER HELPER
-           =================================================================== */
-        const SCALE_DEFINITIONS = {
-            'none': [],
-            'pentaMinA': ['A', 'C', 'D', 'E', 'G'],
-            'bluesA': ['A', 'C', 'D', 'D#', 'E', 'G'],
-            'majorA': ['A', 'B', 'C#', 'D', 'E', 'F#', 'G#'],
-            'minorA': ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-        };
-
-        function highlightScale(scaleKey) {
-            activeScale = scaleKey;
-            updateFretboardBadges();
-        }
-
-        function updateFretboardBadges() {
-            const scaleNotes = SCALE_DEFINITIONS[activeScale] || [];
-
-            for (let s = 0; s < 6; s++) {
-                for (let f = 0; f <= TOTAL_FRETS; f++) {
-                    const cell = document.getElementById(`cell-${s}-${f}`);
-                    if (!cell) continue;
-
-                    const noteInfo = getNoteForStringFret(s, f);
-                    const soloHint = getSoloKeyHint(s, f);
-                    const key = `${s}-${f}`;
-
-                    const isStruck = currentlyPlayingNotes[key] !== undefined;
-                    const isChordPos = currentMode === 'chord' && activeChordNotes.some(n => (n.string !== undefined ? n.string : n.s) === s && (n.fret !== undefined ? n.fret : n.f) === f);
-                    const isInScale = scaleNotes.includes(noteInfo.name);
-
-                    // 1. Struck Note (Instant Flash Cyan "Bolinha")
-                    if (isStruck) {
-                        cell.innerHTML = `<div class="note-dot-active note-dot-strummed">${noteInfo.name}</div>`;
-                    } 
-                    // 2. Active Chord Positions (Persistent Gold/Amber "Bolinhas")
-                    else if (isChordPos) {
-                        cell.innerHTML = `<div class="note-dot-chord shadow-lg">${noteInfo.name}</div>`;
-                    } 
-                    // 3. Scale Helper Highlight (Green Ring)
-                    else if (isInScale) {
-                        cell.innerHTML = `<span class="bg-emerald-500 text-slate-950 px-1.5 py-0.5 rounded-full text-[9px] font-black neon-glow-green">${noteInfo.name}</span>`;
-                    } 
-                    // 4. Solo Mode Key Map Hint Badge
-                    else if (currentMode === 'solo' && soloHint) {
-                        cell.innerHTML = `<span class="bg-slate-900/90 border border-cyan-500/40 text-cyan-400 px-1 rounded text-[8px] font-mono">${soloHint}</span>`;
-                    } 
-                    // 5. Default Hover Reveal
-                    else {
-                        cell.innerHTML = `<span class="opacity-0 hover:opacity-100 text-[8px] bg-slate-950/80 px-1 rounded text-cyan-400">${noteInfo.name}</span>`;
-                    }
-                }
-            }
-        }
-
-        /* ===================================================================
-           7. AUTO-STRUMMER ENGINE
-           =================================================================== */
-        function toggleAutoStrummer() {
-            isAutoStrumming = !isAutoStrumming;
-            const btn = document.getElementById('btnAutoStrum');
-
-            if (isAutoStrumming) {
-                btn.innerText = 'PARAR';
-                btn.className = "px-3 py-1 rounded-lg bg-red-500/20 border border-red-500/50 text-red-400 font-tech text-xs font-bold hover:bg-red-500/30 transition animate-pulse";
-                startAutoStrummer();
-            } else {
-                btn.innerText = 'LIGAR';
-                btn.className = "px-3 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 font-tech text-xs font-bold hover:bg-emerald-500/20 transition";
-                clearInterval(autoStrumInterval);
-            }
-        }
-
-        function updateBPM(val) {
-            bpm = parseInt(val);
-            document.getElementById('bpmDisplay').innerText = `${bpm} BPM`;
-            if (isAutoStrumming) {
-                clearInterval(autoStrumInterval);
-                startAutoStrummer();
-            }
-        }
-
-        function startAutoStrummer() {
-            const intervalMs = (60 / bpm) * 1000;
-            let step = 0;
-            autoStrumInterval = setInterval(() => {
-                strum(step % 2 === 0 ? 'down' : 'up');
-                step++;
-            }, intervalMs);
-        }
-
-        /* ===================================================================
-           8. GLOBAL KEYBOARD EVENT LISTENERS
-           =================================================================== */
-        window.addEventListener('keydown', (e) => {
-            // Prevent default page scroll for space and arrows
-            if (['Space', 'ArrowUp', 'ArrowDown', 'Backspace'].includes(e.code)) {
-                e.preventDefault();
-            }
-
-            // Mode Toggle via Backspace
-            if (e.code === 'Backspace') {
-                setMode(currentMode === 'chord' ? 'solo' : 'chord');
-                return;
-            }
-
-            // Strumming Controls
-            if (e.code === 'Space' || e.code === 'ArrowDown') {
-                strum('down');
-                return;
-            }
-            if (e.key === 'Shift' && currentMode === 'chord' || e.code === 'ArrowUp') {
-                strum('up');
-                return;
-            }
-
-            // Techniques Key Triggers (Chord Mode)
-            if (currentMode === 'chord') {
-                if (e.key.toLowerCase() === 'z') { triggerTechnique('bend'); return; }
-                if (e.key.toLowerCase() === 'x') { triggerTechnique('slide'); return; }
-                if (e.key.toLowerCase() === 'v') { triggerTechnique('vibrato'); return; }
-                if (e.key.toLowerCase() === 'c') { togglePalmMute(); return; }
-
-                // Chord Triggers
-                const chordKey = e.key.toLowerCase();
-                if (CHORDS_DICT[chordKey]) {
-                    const chord = CHORDS_DICT[chordKey];
-                    activeChordNotes = chord.notes;
-                    activeChordName = chord.name;
-                    strum('down');
-                    return;
-                }
-            }
-
-            // Solo Mode Direct Note Triggering (+40 Keys)
-            if (currentMode === 'solo') {
-                let mapped = null;
-                if (e.shiftKey && SOLO_KEY_SHIFT_MAP[e.key]) {
-                    mapped = SOLO_KEY_SHIFT_MAP[e.key];
-                } else if (SOLO_KEY_MAP[e.key.toLowerCase()]) {
-                    mapped = SOLO_KEY_MAP[e.key.toLowerCase()];
-                }
-
-                if (mapped) {
-                    playFretDirect(mapped.string, mapped.fret);
-                }
-            }
-        });
-
-        // Initialize Application on Load
-        window.onload = () => {
-            renderFretboard();
-            setMode('chord');
-        };
-    </script>
+<body>
+
+<div id="stage">
+  <video id="video" autoplay playsinline muted></video>
+  <div id="tint"></div>
+</div>
+
+<header id="topbar">
+  <div class="brand glass">Lente</div>
+  <button class="icon-btn glass" id="flipBtn" aria-label="Alternar câmera">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 7h4l2-3h6l2 3h4v12H3z"/><path d="M9 13a3 3 0 0 1 5-2l1 1M15 14a3 3 0 0 1-5 2l-1-1"/></svg>
+  </button>
+</header>
+
+<footer id="bottom">
+  <div id="filterName" class="glass" aria-live="polite">Normal</div>
+  <div id="carousel" role="listbox" aria-label="Filtros"></div>
+</footer>
+
+<div id="flash"></div>
+
+<div id="modal" role="dialog" aria-modal="true" aria-label="Foto capturada">
+  <div class="sheet glass">
+    <img id="photo" alt="Foto capturada com o filtro aplicado">
+    <div class="row">
+      <button class="btn ghost" id="closeBtn">Descartar</button>
+      <button class="btn primary" id="downloadBtn">Baixar foto</button>
+    </div>
+  </div>
+</div>
+
+<div id="gate">
+  <h2 id="gateTitle" style="margin:0">Ative sua câmera</h2>
+  <p id="gateMsg">Precisamos de acesso à câmera para mostrar o preview com filtros.</p>
+  <button class="btn primary" id="retryBtn">Permitir câmera</button>
+</div>
+
+<script>
+/* =====================================================================
+   1) DEFINIÇÃO DOS FILTROS
+   Cada filtro é uma string de CSS filter. A MESMA string é usada:
+   - no preview (video.style.filter), e
+   - na captura (ctx.filter do canvas), garantindo que a foto = o que se vê.
+   "tint" é uma camada de gradiente opcional misturada sobre a imagem.
+   ===================================================================== */
+const FILTERS = [
+  { name: 'Normal',          css: 'none',
+    swatch: 'linear-gradient(135deg,#fff,#9aa0a6)' },
+  { name: 'Preto e Branco',  css: 'grayscale(1) contrast(1.15)',
+    swatch: 'linear-gradient(135deg,#f2f2f2,#222)' },
+  { name: 'Cyberpunk',       css: 'hue-rotate(-20deg) saturate(1.9) contrast(1.2) brightness(1.05)',
+    tint: { from: '#ff2bd6', to: '#00e5ff', mode: 'overlay', alpha: .55 },
+    swatch: 'linear-gradient(135deg,#ff2bd6,#00e5ff)' },
+  { name: 'Vintage',         css: 'sepia(.85) contrast(1.05) brightness(1.05) saturate(1.1)',
+    swatch: 'linear-gradient(135deg,#f3d9a4,#8a5a2b)' },
+  { name: 'Beleza',          css: 'blur(1px) brightness(1.12) saturate(1.3) contrast(.94)',
+    swatch: 'linear-gradient(135deg,#ffe3ec,#ffb3c7)' },
+  { name: 'Divertido',       css: 'saturate(3) contrast(1.25) hue-rotate(-25deg)',
+    swatch: 'linear-gradient(135deg,#7cff00,#ff00b8 55%,#00c8ff)' },
+];
+
+/* =====================================================================
+   2) REFERÊNCIAS E ESTADO
+   ===================================================================== */
+const $ = (id) => document.getElementById(id);
+const video = $('video'), tint = $('tint'), carousel = $('carousel');
+const state = { index: 0, facing: 'user', stream: null, blob: null, url: null };
+
+/* =====================================================================
+   3) CÂMERA (WebRTC / getUserMedia)
+   ===================================================================== */
+async function startCamera() {
+  stopCamera();
+  try {
+    // facingMode: 'user' = frontal, 'environment' = traseira
+    state.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: state.facing, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    video.srcObject = state.stream;
+    // Espelha somente a câmera frontal, como um espelho natural
+    video.classList.toggle('mirror', state.facing === 'user');
+    $('gate').classList.remove('show');
+  } catch (err) {
+    showGate(err);
+  }
+}
+function stopCamera() {
+  if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+  state.stream = null;
+}
+function showGate(err) {
+  const denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
+  $('gateTitle').textContent = denied ? 'Câmera bloqueada' : 'Câmera indisponível';
+  $('gateMsg').textContent = !navigator.mediaDevices
+    ? 'Abra esta página via HTTPS ou localhost para usar a câmera.'
+    : denied ? 'Libere a câmera nas permissões do navegador e toque em tentar de novo.'
+             : 'Não encontramos uma câmera disponível. Conecte uma e tente de novo.';
+  $('retryBtn').textContent = 'Tentar de novo';
+  $('gate').classList.add('show');
+}
+
+/* =====================================================================
+   4) CARROSSEL DE FILTROS
+   O item centralizado é o ativo e funciona como botão de captura.
+   Tocar num item lateral apenas o centraliza (e seleciona).
+   ===================================================================== */
+FILTERS.forEach((f, i) => {
+  const b = document.createElement('button');
+  b.className = 'lens'; b.style.background = f.swatch;
+  b.setAttribute('role', 'option'); b.setAttribute('aria-label', f.name);
+  b.addEventListener('click', () => {
+    if (i === state.index) capture();           // já está no centro → tira a foto
+    else b.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  });
+  carousel.appendChild(b);
+});
+const lenses = [...carousel.children];
+
+function applyFilter(i) {
+  state.index = i;
+  const f = FILTERS[i];
+  video.style.filter = f.css;                    // filtro em tempo real via CSS
+  if (f.tint) {                                  // camada de cor (Neon)
+    tint.style.background = `linear-gradient(135deg, ${f.tint.from}, ${f.tint.to})`;
+    tint.style.mixBlendMode = f.tint.mode;
+    tint.style.opacity = f.tint.alpha;
+  } else tint.style.opacity = 0;
+  lenses.forEach((el, k) => {
+    el.classList.toggle('active', k === i);
+    el.setAttribute('aria-selected', k === i);
+  });
+  $('filterName').textContent = f.name;
+}
+
+// Descobre qual item está mais perto do centro durante o scroll
+let ticking = false;
+carousel.addEventListener('scroll', () => {
+  if (ticking) return; ticking = true;
+  requestAnimationFrame(() => {
+    ticking = false;
+    const mid = carousel.scrollLeft + carousel.clientWidth / 2;
+    let best = 0, dist = Infinity;
+    lenses.forEach((el, k) => {
+      const d = Math.abs(el.offsetLeft + el.offsetWidth / 2 - mid);
+      if (d < dist) { dist = d; best = k; }
+    });
+    if (best !== state.index) applyFilter(best);
+  });
+});
+function goTo(i) {
+  i = Math.max(0, Math.min(FILTERS.length - 1, i));
+  lenses[i].scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+}
+
+/* =====================================================================
+   5) CAPTURA: desenha o frame atual num <canvas> com o filtro aplicado
+   ===================================================================== */
+function capture() {
+  if (!state.stream || !video.videoWidth) return;
+  const f = FILTERS[state.index];
+
+  // Recorta o frame com a mesma proporção da tela (object-fit: cover),
+  // para a foto sair exatamente como aparece no preview.
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const screenRatio = video.clientWidth / video.clientHeight;
+  let sw = vw, sh = vh;
+  if (vw / vh > screenRatio) sw = vh * screenRatio; else sh = vw / screenRatio;
+  const sx = (vw - sw) / 2, sy = (vh - sh) / 2;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(sw); canvas.height = Math.round(sh);
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  // Suporte nativo a ctx.filter (Chrome/Firefox/Edge). Safari/iOS não tem → fallback por pixels.
+  const nativeFilter = 'filter' in ctx;
+
+  ctx.save();
+  if (state.facing === 'user') {               // espelha a foto da frontal, igual ao preview
+    ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+  }
+  if (nativeFilter) ctx.filter = f.css;
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  ctx.restore();
+  ctx.filter = 'none';
+
+  if (!nativeFilter && f.css !== 'none') pixelFilter(ctx, canvas.width, canvas.height, f.css);
+
+  // Camada de cor (gradiente + modo de mistura)
+  if (f.tint) {
+    const g = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+    g.addColorStop(0, f.tint.from); g.addColorStop(1, f.tint.to);
+    ctx.globalCompositeOperation = f.tint.mode;
+    ctx.globalAlpha = f.tint.alpha;
+    ctx.fillStyle = g; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  }
+
+  // Efeito de flash + congela a imagem no modal
+  const flash = $('flash'); flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go');
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    if (state.url) URL.revokeObjectURL(state.url);
+    state.blob = blob; state.url = URL.createObjectURL(blob);
+    $('photo').src = state.url;
+    $('modal').classList.add('open');
+    $('downloadBtn').focus();
+  }, 'image/jpeg', 0.93);
+}
+
+/* Fallback para navegadores sem ctx.filter: aplica as funções do filtro pixel a pixel.
+   Suporta grayscale, sepia, saturate, contrast, brightness e invert. (blur/hue-rotate ficam de fora.) */
+function pixelFilter(ctx, w, h, css) {
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+  const ops = [...css.matchAll(/(\w[\w-]*)\(([\d.]+)(?:px|deg)?\)/g)].map(m => [m[1], parseFloat(m[2])]);
+  const clamp = (v) => v < 0 ? 0 : v > 255 ? 255 : v;
+  for (let i = 0; i < d.length; i += 4) {
+    let r = d[i], g = d[i + 1], b = d[i + 2];
+    for (const [fn, a] of ops) {
+      const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      if (fn === 'grayscale') { r += (lum - r) * a; g += (lum - g) * a; b += (lum - b) * a; }
+      else if (fn === 'sepia') {
+        const sr = .393 * r + .769 * g + .189 * b, sg = .349 * r + .686 * g + .168 * b, sb = .272 * r + .534 * g + .131 * b;
+        r += (sr - r) * a; g += (sg - g) * a; b += (sb - b) * a;
+      }
+      else if (fn === 'saturate') { r = lum + (r - lum) * a; g = lum + (g - lum) * a; b = lum + (b - lum) * a; }
+      else if (fn === 'contrast') { r = (r - 128) * a + 128; g = (g - 128) * a + 128; b = (b - 128) * a + 128; }
+      else if (fn === 'brightness') { r *= a; g *= a; b *= a; }
+      else if (fn === 'invert') { r += (255 - 2 * r) * a; g += (255 - 2 * g) * a; b += (255 - 2 * b) * a; }
+      r = clamp(r); g = clamp(g); b = clamp(b);
+    }
+    d[i] = r; d[i + 1] = g; d[i + 2] = b;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* =====================================================================
+   6) DOWNLOAD E EVENTOS
+   ===================================================================== */
+$('downloadBtn').addEventListener('click', () => {
+  if (!state.url) return;
+  const a = document.createElement('a');
+  a.href = state.url;
+  a.download = `lente-${FILTERS[state.index].name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.jpg`;
+  document.body.appendChild(a); a.click(); a.remove();
+});
+const closeModal = () => $('modal').classList.remove('open');
+$('closeBtn').addEventListener('click', closeModal);
+$('modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+$('flipBtn').addEventListener('click', () => {
+  state.facing = state.facing === 'user' ? 'environment' : 'user';
+  startCamera();
+});
+$('retryBtn').addEventListener('click', startCamera);
+
+// Teclado: setas trocam de filtro, espaço/Enter captura, Esc fecha o modal
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+  if ($('modal').classList.contains('open')) return;
+  if (e.key === 'ArrowRight') goTo(state.index + 1);
+  if (e.key === 'ArrowLeft') goTo(state.index - 1);
+  if (e.key === ' ' && document.activeElement === document.body) { e.preventDefault(); capture(); }
+});
+
+/* =====================================================================
+   7) INICIALIZAÇÃO
+   ===================================================================== */
+applyFilter(0);
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) showGate();
+else startCamera();   // pede permissão da câmera ao abrir
+</script>
 </body>
 </html>
