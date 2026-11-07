@@ -1,43 +1,293 @@
-# 🏍️ Grau da Quebrada
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Grau da Quebrada</title>
+<style>
+:root{--u:min(.2vh,.12vw);--y:#f2c81a;--r:#d92b2b;--a:#1b1b1f}
+*{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#15151a;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#fff}
+canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none}
+.hide{display:none!important}
+.b{position:fixed;bottom:max(calc(var(--u)*12),env(safe-area-inset-bottom));display:flex;align-items:center;justify-content:center;text-align:center;
+  font:900 calc(var(--u)*17)/1.1 Impact,"Arial Black",sans-serif;letter-spacing:.02em;border-radius:calc(var(--u)*18);border:3px solid rgba(255,255,255,.55);
+  background:rgba(255,255,255,.14);touch-action:none;color:#fff;text-shadow:0 2px 0 rgba(0,0,0,.5)}
+.b.on{background:rgba(255,255,255,.4)}
+#acc{right:calc(var(--u)*12);width:calc(var(--u)*150);height:calc(var(--u)*120);background:rgba(40,200,80,.35);font-size:calc(var(--u)*24)}
+#pull{right:calc(var(--u)*12);bottom:calc(var(--u)*144);width:calc(var(--u)*110);height:calc(var(--u)*100);background:rgba(50,120,255,.35)}
+#cut{right:calc(var(--u)*134);bottom:calc(var(--u)*144);width:calc(var(--u)*100);height:calc(var(--u)*100);background:rgba(170,80,230,.35)}
+#brk{left:calc(var(--u)*12);width:calc(var(--u)*130);height:calc(var(--u)*120);background:rgba(230,50,50,.38)}
+#feet{left:calc(var(--u)*154);width:calc(var(--u)*100);height:calc(var(--u)*90);background:rgba(240,200,40,.3)}
+#lane{left:calc(var(--u)*12);bottom:calc(var(--u)*144);width:calc(var(--u)*110);height:calc(var(--u)*90);background:rgba(255,255,255,.18)}
+.panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,14,.72);padding:12px;overflow:auto}
+.card{width:min(520px,100%);background:#1e1c22;border:3px solid var(--y);border-radius:6px;padding:18px 20px;box-shadow:8px 8px 0 #000}
+h1{margin:0 0 4px;font:400 clamp(30px,7vw,46px)/1 Impact,"Arial Black",sans-serif;color:var(--y);letter-spacing:.02em;text-shadow:3px 3px 0 var(--r)}
+.card p{margin:0 0 12px;color:#cfcfd6}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed #4a4752;font-size:16px}
+.row em{color:#ffb347;font-style:normal}
+.card button{font:inherit;font-weight:800;border:0;border-radius:4px;padding:9px 14px;margin:2px;background:#3a3742;color:#fff;cursor:pointer;touch-action:manipulation}
+.card button:disabled{opacity:.35;cursor:not-allowed}
+.card button.big{width:100%;margin:10px 0 0;padding:14px;font-size:20px;background:var(--y);color:#111}
+.card button.sec{background:#2d6cdf}
+.card small{display:block;margin-top:12px;color:#a9a7b2;line-height:1.4}
+pre{margin:8px 0;font:inherit;white-space:pre-wrap;line-height:1.5}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
 
-Simulador mobile de **grau de bike e moto** com cultura urbana brasileira, feito em Unity (C#).
-O jogo inteiro está em **um único arquivo**: `Assets/Scripts/GrauDaQuebradaGame.cs`.
+<div id="ctl" class="hide">
+  <div class="b" id="brk" data-k="brk">FREIO<br>TRASEIRO</div>
+  <div class="b" id="feet" data-k="feet">NO PÉ</div>
+  <div class="b" id="lane" data-k="lane">TROCAR<br>FAIXA</div>
+  <div class="b" id="cut" data-k="cut">CORTAR<br>GIRO</div>
+  <div class="b" id="pull" data-k="pull">EMPINAR</div>
+  <div class="b" id="acc" data-k="acc">ACELERAR</div>
+</div>
 
-## ▶️ Como rodar
-1. Crie um projeto Unity **3D** (2021.3 LTS ou Unity 6, Built-in ou URP).
-2. Copie `Assets/Scripts/GrauDaQuebradaGame.cs` para o `Assets/` do seu projeto.
-3. Abra qualquer cena (pode ser vazia) e aperte **Play**. O jogo se monta sozinho.
-4. Se usar o novo Input System: *Project Settings > Player > Active Input Handling = Both*.
+<div id="menu" class="panel"><div class="card" id="mc"></div></div>
+<div id="over" class="panel hide"><div class="card" id="oc"></div></div>
 
-## 🎮 Controles
-| Ação | Teclado | Mobile |
-|---|---|---|
-| Acelerar | W / ↑ | botão ACELERAR |
-| Empinar | Espaço | botão EMPINAR |
-| Freio traseiro (salva o grau) | S / ↓ | botão FREIO TRASEIRO |
-| Freio dianteiro (stoppie) | X | botão FREIO DIANT. |
-| Cortar giro | C | botão CORTAR GIRO |
-| Inclinar (mão no chão) | A / D | setas na tela |
-| No pé | Shift | botão NO PÉ |
+<script>
+"use strict";
+/* ============ utilidades ============ */
+const $=s=>document.querySelector(s),cv=$('#c'),g=cv.getContext('2d'),PI=Math.PI;
+const LH=520;let W,H,D,Z,LW;
+function rs(){D=devicePixelRatio||1;W=innerWidth;H=innerHeight;cv.width=W*D;cv.height=H*D;Z=H/LH;LW=W/Z}
+addEventListener('resize',rs);rs();
+const R=n=>{n=Math.sin(n*127.1+311.7)*43758.5453;return n-Math.floor(n)};
+const cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+const mix=(a,b,k)=>a.map((v,i)=>Math.round(v+(b[i]-v)*k));
+const rgb=c=>`rgb(${c[0]},${c[1]},${c[2]})`;
 
-## ✨ O que tem
-- Mapa infinito procedural (quebrada, bairro, comercial, terreno baldio, praça)
-- Física do grau com pêndulo invertido, ponto de equilíbrio e medidor na tela
-- Manobras: corta-giro, RL parado, no pé, mão no chão, raspar a rabeta, stoppie
-- Combo, multiplicador, moedas, fama, missões diárias e save (PlayerPrefs)
-- Garagem com 9 veículos e 14 categorias de customização (moto + personagem)
-- Trânsito (Uno com escada, Gol quadrado, Kombi, ônibus), pedestres e cachorros caramelo
-- Ciclo dia/noite, chuva, ragdoll, câmera lenta e som procedural
+/* ============ dados ============ */
+const V=[
+ {n:'Biz 100',p:0,ms:520,ac:200,tol:8,gr:320,th:85,bk:170,pu:95},
+ {n:'Tita 160',p:1500,ms:600,ac:230,tol:7,gr:360,th:88,bk:170,pu:100},
+ {n:'XJ 600',p:8000,ms:780,ac:320,tol:4.5,gr:480,th:105,bk:180,pu:120},
+ {n:'Gio 26 (bike)',p:0,ms:280,ac:110,tol:7,gr:330,th:70,bk:150,pu:85,bike:1}];
+const COL=['#d92b2b','#1b1b1f','#f2f2f2','#2255dd','#f2c81a','#1e9e48'],
+ COLN=['Vermelha','Preta','Branca','Azul','Amarela','Verde'],COLP=[0,0,0,100,100,100];
+const SH=[['Branca lisa','#f4f4f4',0,0],['Rubro-negra','#d6141c','#111',150],['Alvinegra','#f4f4f4','#111',150]];
+const HE=['Sem capacete','Na testa','Aberto','Fechado'],HP=[0,50,100,150],HB=[1,1,1.1,1.15];
+const CATS=[['v','Veículo',V.map(x=>x.n),V.map(x=>x.p)],['c','Cor',COLN,COLP],
+ ['s','Camisa',SH.map(x=>x[0]),SH.map(x=>x[3])],['h','Capacete',HE,HP]];
 
-## 🛠️ Próximos passos
-- [ ] Integrar AdMob (ponto marcado em `RewardedAdStub()`)
-- [ ] Trocar primitivas por modelos 3D e texturas
-- [ ] Separar o arquivo em múltiplos scripts quando o projeto crescer
-- [ ] Leaderboards online e "fantasmas" para rachas
+let S;try{S=JSON.parse(localStorage.gq)||{}}catch(e){S={}}
+S.coins??=300;S.best??=0;S.own??={};S.sel??={v:0,c:0,s:0,h:0};
+const save=()=>{try{localStorage.gq=JSON.stringify(S)}catch(e){}};
 
-## ⚠️ Avisos
-- Nomes de motos e camisas são **inspirados** (sem marcas registradas). Para usar marcas reais, é preciso licenciar.
-- Grau em via pública é perigoso e ilegal. Este jogo é apenas entretenimento. Use capacete!
+/* ============ estado ============ */
+let P={},O=[],pop=[],sp=[],rd=null,t=0,st='menu',last=0,held={},tap={},nextSp=0,why='',pen=.3,res={};
+const SX=()=>LW*.28,LY=l=>446-l*48,LS=l=>1-l*.1;
+function reset(){
+ P={x:0,v:0,a:0,w:0,lane:0,ly:0,cut:0,tag:0,ct:0,gr:0,pts:0,wt:0,mm:1,wtime:0,bumps:0,rentes:0,man:'',act:false,bal:false,scr:false,run:0};
+ O=[];pop=[];sp=[];rd=null;nextSp=500;held={};tap={};
+}
+const mult=()=>Math.min(10,1+Math.floor(P.ct/5));
+const say=(s,c)=>{pop.push({s,c:c||'#fff',t:1.8});if(pop.length>5)pop.shift()};
+const bonus=(s,n)=>{P.pts+=n;P.wt+=n*mult();say('+'+n+'  '+s,'#ffd84a')};
+reset();
 
-## 📄 Licença
-MIT. Veja o arquivo `LICENSE`.
+/* ============ menu / garagem ============ */
+function menu(){
+ let tot=0,h=`<h1>GRAU DA QUEBRADA</h1><p>R$ ${S.coins} &nbsp;|&nbsp; Recorde ${S.best.toLocaleString('pt-BR')}</p>`;
+ CATS.forEach(([k,n,o,p])=>{const i=S.sel[k],ow=p[i]==0||S.own[k+i];if(!ow)tot+=p[i];
+  h+=`<div class="row"><span>${n}: <b>${o[i]}</b>${ow?'':` <em>[R$${p[i]}]</em>`}</span>
+  <span><button data-k="${k}" data-d="-1">&#9664;</button><button data-k="${k}" data-d="1">&#9654;</button></span></div>`});
+ h+=`<button class="big sec" id="buy" ${tot&&S.coins>=tot?'':'disabled'}>Comprar tudo (R$ ${tot})</button>
+ <button class="big" id="play" ${tot?'disabled':''}>Jogar</button>
+ <small>Acelere e toque em EMPINAR. Mantenha o ponteiro na zona verde; passou do ponto, segure o freio traseiro. Troque de faixa para fugir do Uno, do caramelo e do bueiro.<br>
+ Teclado: &rarr; ou D acelera, Espaço empina, &darr; ou S freio, C corta giro, F no pé, Q troca de faixa.<br>
+ Grau na rua é perigoso e ilegal. Aqui é só no jogo. Na vida real, use capacete (aqui ele rende +moedas).</small>`;
+ $('#mc').innerHTML=h;
+}
+$('#mc').onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;
+ if(b.dataset.k){const c=CATS.find(x=>x[0]==b.dataset.k),n=c[2].length;S.sel[c[0]]=(S.sel[c[0]]+ +b.dataset.d+n)%n;menu();return}
+ if(b.id=='buy'){CATS.forEach(([k,,,p])=>{const i=S.sel[k];if(p[i]&&!S.own[k+i]){S.coins-=p[i];S.own[k+i]=1}});save();menu()}
+ if(b.id=='play')start()};
+$('#oc').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+ if(b.id=='again')start();if(b.id=='gar'){$('#over').classList.add('hide');$('#menu').classList.remove('hide');st='menu';reset();menu()}
+ if(b.id=='dbl'&&!res.dbl){res.dbl=1;S.coins+=res.coins;save();b.disabled=true;b.textContent='Moedas dobradas!'}};
+function start(){reset();st='play';$('#menu').classList.add('hide');$('#over').classList.add('hide');$('#ctl').classList.remove('hide')}
+
+/* ============ input (multitoque + teclado) ============ */
+const ONE={pull:1,cut:1,lane:1};
+function press(k,v){if(v){if(ONE[k])tap[k]=1;else held[k]=1}else if(!ONE[k])held[k]=0;
+ const el=$('#'+k);if(el)el.classList.toggle('on',!!v)}
+document.querySelectorAll('.b').forEach(el=>{const k=el.dataset.k;
+ el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);press(k,1)});
+ ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>el.addEventListener(ev,()=>press(k,0)))});
+const KM={ArrowRight:'acc',KeyD:'acc',Space:'pull',ArrowUp:'pull',KeyW:'pull',ArrowDown:'brk',KeyS:'brk',KeyC:'cut',KeyF:'feet',KeyQ:'lane'};
+addEventListener('keydown',e=>{const k=KM[e.code];if(k){e.preventDefault();if(!e.repeat)press(k,1)}});
+addEventListener('keyup',e=>{const k=KM[e.code];if(k)press(k,0)});
+
+/* ============ jogo ============ */
+function crash(r,p){if(st!='play')return;why=r;pen=p;st='dead';
+ rd={x:20,y:-60,vx:P.v*.7,vy:-320,r:0,t:0};$('#ctl').classList.add('hide');held={}}
+function finish(){
+ const hb=HB[S.sel.h],keep=1-pen,rp=Math.round(P.pts*keep),rc=Math.round(P.wt*keep*hb/100);
+ S.coins+=rc;S.best=Math.max(S.best,rp);save();st='over';res={coins:rc,dbl:0};
+ $('#oc').innerHTML=`<h1>CAIU!</h1><p>${why}</p><pre>Pontos: <b>${rp.toLocaleString('pt-BR')}</b>${pen?` (penalidade ${Math.round(pen*100)}%)`:''}
+Multiplicador máximo: x${P.mm}   Tempo de grau: ${P.wtime.toFixed(1)}s
+Lombadas no grau: ${P.bumps}   Rentes em carros: ${P.rentes}
+Moedas: +R$ ${rc}${hb>1?' (bônus capacete)':''}   Saldo: R$ ${S.coins}</pre>
+ <button class="big sec" id="dbl" ${rc?'':'disabled'}>Dobrar moedas (anúncio)</button>
+ <button class="big" id="again">Jogar de novo</button><button class="big sec" id="gar">Garagem</button>`;
+ $('#over').classList.remove('hide')}
+
+const OW={bump:30,dog:34,uno:130,man:30};
+function update(dt){
+ t+=dt;
+ if(st=='menu'||st=='over'){P.x+=st=='menu'?70*dt:0;P.a=36+3*Math.sin(t*2);P.v=0;return}
+ if(st=='dead'){rd.t+=dt;rd.vy+=900*dt;rd.x+=rd.vx*dt;rd.y+=rd.vy*dt;if(rd.y>0){rd.y=0;rd.vy*=-.25;rd.vx*=.55}
+  rd.r+=dt*7;P.a+=(105-P.a)*dt*3;sp=sp.filter(s=>(s.t-=dt)>0);if(rd.t>1.5)finish();return}
+ const d=V[S.sel.v];
+ if(tap.pull){tap.pull=0;if(P.a<25)P.w+=d.pu}
+ if(tap.cut){tap.cut=0;P.cut=.18;P.tag=1.2;P.w-=35}
+ if(tap.lane){tap.lane=0;P.lane^=1;P.w+=(Math.random()-.5)*16}
+ P.cut-=dt;P.tag-=dt;P.run+=dt;
+ const thr=held.acc&&P.cut<=0?1:0,brk=held.brk?1:0,feet=held.feet?1:0;
+ /* pêndulo invertido: acelerar levanta, passou do equilíbrio a gravidade derruba, freio traseiro salva */
+ const n=Math.ceil(dt*120),h=dt/n;
+ for(let i=0;i<n;i++){
+  const x=(P.a-60)*PI/180,gv=d.gr*Math.sin(x)*(1+(feet?.25:0))*(P.a>60?1:.3);
+  const al=d.th*thr*(.6+.4*P.v/d.ms)-(brk?d.bk:0)+gv-.8*P.w;
+  P.w+=al*h;P.a+=P.w*h;if(P.a<=0){P.a=0;if(P.w<0)P.w=0}}
+ if(P.a>=85)return crash('Caiu pra trás! Segure o freio traseiro antes de passar do ponto.',.3);
+ P.v=cl(P.v+(thr*d.ac-brk*90-.15*P.v)*dt,0,d.ms);P.x+=P.v*dt;P.ly+=(P.lane-P.ly)*Math.min(1,dt*8);
+ /* estado e pontuação */
+ P.act=P.a>=8;P.bal=P.act&&Math.abs(P.a-60)<=d.tol;P.scr=P.act&&brk&&P.a>=72;
+ let m='';if(P.act)m=P.scr?'Raspando a rabeta!':feet?'Grau no pé':P.tag>0?'Grau no corta-giro':'Grau';
+ if(m&&m!=P.man)say(m);P.man=m;
+ const rate={'Grau':100,'Grau no corta-giro':180,'Grau no pé':250,'Raspando a rabeta!':400}[m]||0;
+ if(P.act){P.gr=1.5;P.ct+=dt;P.wtime+=dt;const q=rate*dt*(P.bal||P.scr?1:.5);P.pts+=q;P.wt+=q*mult();P.mm=Math.max(P.mm,mult());
+  if(P.scr)for(let i=0;i<2;i++)sp.push({x:P.x-8,y:LY(P.ly)-6,vx:-P.v*.3+(Math.random()-.5)*120,vy:-Math.random()*180,t:.35})}
+ else{P.gr-=dt;if(P.gr<=0)P.ct=0}
+ sp=sp.filter(s=>{s.t-=dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.vy+=700*dt;return s.t>0});
+ /* obstáculos */
+ nextSp-=P.v*dt;
+ if(nextSp<=0){const r=Math.random();O.push({t:r<.3?'bump':r<.5?'dog':r<.75?'uno':'man',x:P.x+LW+80,l:Math.random()<.5?0:1,done:0});
+  if(O[O.length-1].t=='bump')O[O.length-1].l=2;nextSp=300+Math.random()*320}
+ const bx0=P.x-14,bx1=P.x+14+52*Math.cos(P.a*PI/180);
+ for(const o of O){
+  if(o.t=='dog')o.x-=45*dt;
+  const w=OW[o.t],ov=bx1>o.x&&bx0<o.x+w,same=o.l==2||Math.abs(P.ly-o.l)<.5;
+  if(o.t=='bump'&&ov&&same&&!o.done){o.done=1;if(P.act&&P.v>60){P.bumps++;bonus('Lombada no grau!',500);P.w+=(Math.random()-.5)*60}else P.v*=.85}
+  else if(o.t=='man'&&ov&&same&&!o.done){o.done=1;if(P.act){P.w+=70;say('Bueiro! Segura!','#ff6b5a')}else if(P.v>d.ms*.55)return crash('Caiu num bueiro aberto!',.3);else P.v*=.6}
+  else if(o.t=='dog'&&ov&&same)return crash('Atropelou o caramelo! Penalidade pesada.',.5);
+  else if(o.t=='uno'){if(ov&&same)return crash('Bateu no Uno com escada!',.3);
+   if(!o.done&&!same&&P.act&&P.v>150&&bx1>o.x-40&&bx0<o.x+w+40){o.done=1;P.rentes++;bonus('Rente em carro!',400)}}}
+ O=O.filter(o=>o.x>P.x-250);
+ pop.forEach(p=>p.t-=dt);pop=pop.filter(p=>p.t>0);
+}
+
+/* ============ desenho ============ */
+const SKY=[[127,198,245],[245,154,85],[11,16,48],[200,130,150],[127,198,245]];
+let night=0;
+function sky(){const u=((t/120+.22)%1)*4,i=Math.floor(u),c=mix(SKY[i],SKY[i+1],u-i);
+ night=cl((60-(c[0]+c[1]+c[2])/3)/60+.0,0,1)*0+cl(1-(c[0]+c[1]+c[2])/300,0,1);
+ const gr=g.createLinearGradient(0,0,0,340);gr.addColorStop(0,rgb(c));gr.addColorStop(1,rgb(mix(c,[255,230,200],.4)));
+ g.fillStyle=gr;g.fillRect(0,0,LW,LH);return c}
+function tx(s,x,y,sz,c,al){g.font=`900 ${sz}px Impact,"Arial Black",sans-serif`;g.textAlign=al||'center';g.lineWidth=sz/6;g.strokeStyle='rgba(0,0,0,.65)';g.strokeText(s,x,y);g.fillStyle=c||'#fff';g.fillText(s,x,y)}
+function rr(x,y,w,h,c){g.fillStyle=c;g.fillRect(x,y,w,h)}
+const SIGNS=[['MERCADINHO','#1e9e48'],['BAR DO ZÉ','#c8281e'],['LAN HOUSE','#2457c9'],['BORRACHARIA','#e0a800']];
+function bld(i,x,by){
+ const r=k=>R(i*13.7+k),w=130+r(1)*34,h=120+r(2)*130,ty=r(3),brick=ty<.45;
+ const col=brick?`rgb(${150+r(4)*30|0},${62+r(4)*14|0},${40})`:['#f0d98c','#9fcfc2','#e59a8c','#b9d3ee','#efefe6','#86b873'][r(5)*6|0];
+ rr(x,by-h,w,h,col);rr(x-4,by-h-8,w+8,8,'#7d7d80');
+ if(brick){g.fillStyle='rgba(255,230,210,.18)';for(let y=by-h+9;y<by;y+=9)g.fillRect(x,y,w,1.5)}
+ if(r(6)<.6){const bw=30;rr(x+w/2-bw/2,by-h-8-34,bw,34,r(7)<.7?'#2a62c9':'#ececec');rr(x+w/2-bw/2-3,by-h-8-38,bw+6,5,'#4d4d52')}
+ for(let k=0;k<2;k++){const wx=x+14+k*(w-60),wy=by-h+18;rr(wx,wy,34,38,night>.35?'#ffd76a':'#a8d4ea');rr(wx+16,wy,2,38,'#333')}
+ if(ty>=.45&&ty<.75){rr(x+w/2-34,by-70,68,70,'#2b2f3d');rr(x+w/2-34,by-72,68,3,'#aaa')}
+ else if(ty>=.75){const s=SIGNS[r(8)*4|0];rr(x+8,by-82,w-16,24,s[1]);tx(s[0],x+w/2,by-64,15,'#fff');rr(x+10,by-52,w-20,42,'#b8e0ec')}
+ if(r(9)<.4){g.fillStyle=`hsl(${r(10)*360},85%,55%)`;g.fillRect(x+10,by-110+r(11)*20,52,26);g.fillStyle=`hsl(${r(12)*360},90%,60%)`;g.fillRect(x+22,by-104+r(11)*20,28,14)}
+}
+function world(sc){
+ const c=sky();
+ /* silhueta distante */
+ const f=P.x*.3;for(let i=Math.floor(f/90)-1;i<Math.floor((f+LW)/90)+2;i++){const h=60+R(i*3.3)*90;rr(i*90-f,340-h,86,h,rgb(mix(c,[60,60,80],.45)))}
+ /* fachadas */
+ const cam=P.x*.8;for(let i=Math.floor(cam/170)-1;i<Math.floor((cam+LW)/170)+2;i++)bld(i,i*170-cam,340);
+ /* calçada, piso tátil, rua */
+ rr(0,340,LW,32,'#8d8a85');rr(0,364,LW,5,'#f2c81a');
+ g.fillStyle='rgba(0,0,0,.35)';for(let i=Math.floor(P.x/140)-1;i<Math.floor((P.x+LW)/140)+2;i++)g.fillRect(i*140-P.x+R(i)*80,350+R(i+9)*8,2+R(i+3)*16,1.5);
+ rr(0,372,LW,100,'#2b2b30');rr(0,470,LW,60,'#19191c');rr(0,372,LW,3,'#bdbdbd');
+ g.fillStyle='#e8d46a';for(let x=-(P.x%80);x<LW;x+=80)g.fillRect(x,421,44,3);
+ /* postes e fiação bagunçada */
+ const pk=Math.floor(P.x/260)-1;
+ for(let k=pk;k<pk+Math.ceil(LW/260)+3;k++){const x=k*260-P.x,nx=x+260;
+  rr(x-4,190,8,152,'#5a5650');rr(x-28,196,56,5,'#3a352f');
+  g.strokeStyle='#0a0a0a';g.lineWidth=1.3;
+  for(let j=0;j<3;j++){g.beginPath();g.moveTo(x-24+j*24,198);g.quadraticCurveTo((x+nx)/2,198+34+R(k*5+j)*28,nx-24+j*24,198);g.stroke()}}
+ /* obstáculos e moto, da faixa de trás pra frente */
+ const bikeFar=P.ly>.5;
+ for(const l of [1,0]){if(l==0&&bikeFar)drawBike();for(const o of O)if(o.l==l||o.l==2)obs(o,l);if(l==1&&!bikeFar)drawBike()}
+ if(sc!==0){}
+ g.fillStyle='rgba(255,170,60,.0)';
+ if(st=='play'||st=='dead')for(const s of sp){rr(s.x-P.x+SX(),s.y,3,3,'#ffcf4a')}
+ if(night>.05){g.fillStyle=`rgba(5,8,30,${night*.45})`;g.fillRect(0,0,LW,LH)}
+}
+function obs(o,l){
+ const x=o.x-P.x+SX(),y=LY(l),s=LS(l);g.save();g.translate(x,y);g.scale(s,s);
+ if(o.t=='bump'){g.fillStyle='#f2c81a';g.beginPath();g.ellipse(15,0,18,8,0,PI,0);g.fill();g.fillStyle='#111';for(let k=0;k<3;k++)g.fillRect(4+k*9,-8,4,8)}
+ if(o.t=='man'){g.fillStyle='#050505';g.beginPath();g.ellipse(15,-2,17,6,0,0,7);g.fill();g.strokeStyle='#666';g.lineWidth=2;g.stroke()}
+ if(o.t=='dog'){rr(0,-26,26,13,'#d1883f');rr(22,-34,13,11,'#d1883f');rr(-6,-30,8,4,'#d1883f');rr(2,-14,4,14,'#b8712d');rr(20,-14,4,14,'#b8712d');rr(30,-30,2,2,'#111')}
+ if(o.t=='uno'){rr(0,-30,130,22,'#c8c8d0');rr(22,-52,76,24,'#c8c8d0');rr(28,-49,30,18,'#9fd0e6');rr(62,-49,30,18,'#9fd0e6');
+  g.strokeStyle='#555';g.lineWidth=2;g.beginPath();g.moveTo(24,-58);g.lineTo(96,-58);g.moveTo(24,-55);g.lineTo(96,-55);for(let k=0;k<6;k++){g.moveTo(28+k*13,-58);g.lineTo(28+k*13,-55)}g.stroke();
+  [22,100].forEach(wx=>{g.fillStyle='#111';g.beginPath();g.arc(wx,-8,10,0,7);g.fill();g.fillStyle='#999';g.beginPath();g.arc(wx,-8,4,0,7);g.fill()})}
+ g.restore()}
+function drawBike(){
+ if(st=='menu'||st=='over')return bike(SX(),LY(0),1,P.a,true,false);
+ bike(SX(),LY(P.ly),LS(P.ly),P.a,st!='dead',held.feet);
+ if(st=='dead'){const d=V[S.sel.v];g.save();g.translate(SX()+rd.x,LY(P.ly)+rd.y);g.rotate(rd.r);
+  g.fillStyle=SH[S.sel.s][1];g.fillRect(-6,-28,12,26);g.fillStyle='#b9825b';g.beginPath();g.arc(0,-36,8,0,7);g.fill();g.restore()}}
+function bike(x,y,sc,a,rider,feet){
+ const d=V[S.sel.v],col=COL[S.sel.c],sh=SH[S.sel.s],he=S.sel.h,Rw=d.bike?14:15,L=d.bike?46:54,skin='#b9825b';
+ const ln=(x1,y1,x2,y2,c,w)=>{g.strokeStyle=c;g.lineWidth=w;g.lineCap='round';g.beginPath();g.moveTo(x1,y1);g.lineTo(x2,y2);g.stroke()};
+ const ci=(cx,cy,r,c)=>{g.fillStyle=c;g.beginPath();g.arc(cx,cy,r,0,7);g.fill()};
+ g.save();g.translate(x,y);g.scale(sc,sc);g.translate(0,-Rw);g.rotate(-a*PI/180);
+ [0,L].forEach(wx=>{ci(wx,0,Rw,'#111');ci(wx,0,Rw*.62,'#c9c9cf');ci(wx,0,Rw*.34,'#111')});
+ if(d.bike){ln(0,0,14,-22,col,3);ln(14,-22,L-8,-26,col,3);ln(14,-22,22,0,col,3);ln(22,0,L-8,-26,col,3);ln(L-8,-26,L,0,'#999',3);ln(L-14,-30,L-6,-30,'#222',3);rr(6,-26,14,4,'#222')}
+ else{rr(8,-24,38,16,col);rr(24,-33,22,10,col);rr(0,-28,28,5,'#222');rr(14,-10,24,10,'#333');
+  ln(L,0,L-9,-30,'#aaa',4);ln(L-16,-32,L-6,-32,'#222',4);ci(L+3,-22,5,'#ffe9a0');ln(2,-8,-24,-12,'#9a9aa2',4);rr(-4,-26,10,4,'#c01010')}
+ if(rider){
+  ln(14,-30,8,-66,sh[1],15);if(sh[2])for(const k of[-4,0,4])ln(11+k,-38,7+k,-62,sh[2],2.5);
+  ln(8,-62,L-12,-32,skin,5);ln(14,-30,32,-27,'#1c1c24',9);
+  if(feet)ln(32,-27,58,-36,skin,6);else{ln(32,-27,35,-5,skin,6);rr(30,-5,16,4,'#e8e8e8');ln(30,-3,46,-3,'#2a64d8',3)}
+  ci(6,-77,8,skin);
+  if(he==1)ci(4,-84,8,'#222');
+  if(he==2){ci(5,-79,10,'#222');ci(9,-74,7,skin)}
+  if(he==3){ci(5,-77,10,'#222');rr(8,-80,9,6,'#3a4a5a')}
+  ci(11,-62,2,'#e8c14b')}
+ g.restore()}
+
+function hud(){
+ const d=V[S.sel.v];
+ tx(Math.round(P.pts).toLocaleString('pt-BR'),14,44,38,'#fff','left');
+ tx('x'+mult(),14,80,30,'#ffd84a','left');
+ const pr=mult()>=10?1:(P.ct%5)/5;rr(14,90,190,8,'rgba(0,0,0,.5)');rr(14,90,190*pr,8,'#ffd84a');
+ tx('R$ '+Math.round(P.wt*HB[S.sel.h]/100),LW-14,36,24,'#ffd84a','right');
+ tx(Math.round(P.v/30*3.6)+' km/h',LW-14,62,18,'#fff','right');
+ /* medidor de equilíbrio */
+ const cx=LW/2,cy=112,r=64;
+ for(let i=0;i<=34;i++){const th=85*i/34,an=(-90+180*th/85)*PI/180,px=cx+Math.sin(an)*r,py=cy-Math.cos(an)*r;
+  g.fillStyle=th<8?'#888':Math.abs(th-60)<=d.tol?'#38e060':th>=72?'#ff3b30':th>60?'#ff9230':'#ffd23a';g.fillRect(px-3.5,py-3.5,7,7)}
+ const na=(-90+180*cl(P.a/85,0,1))*PI/180;ln2(cx,cy,cx+Math.sin(na)*(r-8),cy-Math.cos(na)*(r-8));
+ if(P.man)tx(P.man,cx,cy+34,24);
+ if(P.a>60+d.tol&&st=='play'&&Math.floor(t*6)%2)tx('FREIA!!!',cx,cy+72,34,'#ff3b30');
+ pop.forEach((p,i)=>{g.globalAlpha=cl(p.t,0,1);tx(p.s,cx,cy+104+i*24,19,p.c);g.globalAlpha=1});
+ if(!S.best&&P.run<14&&st=='play')tx('Segure ACELERAR, toque EMPINAR e mantenha o ponteiro no verde',cx,300,18);
+ if(st=='dead')tx('CAIU!',cx,250,60,'#ff3b30')}
+function ln2(a,b,c,d){g.strokeStyle='#fff';g.lineWidth=4;g.lineCap='round';g.beginPath();g.moveTo(a,b);g.lineTo(c,d);g.stroke();g.fillStyle='#fff';g.beginPath();g.arc(a,b,6,0,7);g.fill()}
+
+function frame(ts){
+ const dt=Math.min(.033,(ts-last)/1000||0);last=ts;update(dt);
+ g.setTransform(D*Z,0,0,D*Z,0,0);world();
+ if(st=='play'||st=='dead')hud();
+ requestAnimationFrame(frame)}
+menu();requestAnimationFrame(frame);
+</script>
+</body>
+</html>
